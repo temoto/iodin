@@ -1,0 +1,18 @@
+[package]
+name = "iodin"
+version = "0.1.0"
+authors = ["Sergey Shepelev <temotor@gmail.com>"]
+edition = "2018"
+build = "build.rs"
+# not ready yet
+publish = false
+
+[build-dependencies]
+protoc-rust = "^2.1"
+
+[dependencies]
+error-chain = { version = "^0.9", default-features = false } # no backtrace
+log = "^0.4"
+pigpio = { path = "../../pigpio-rust" }
+protobuf = { version = "~2.1", features = ["with-bytes"] }
+stderrlog = "^0.4.1"

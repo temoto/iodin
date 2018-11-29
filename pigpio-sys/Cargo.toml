@@ -1,0 +1,12 @@
+[package]
+name = "pigpio-sys"
+version = "0.1.0"
+authors = ["Sergey Shepelev <temotor@gmail.com>"]
+edition = "2018"
+build = "build.rs"
+
+[target.'cfg(not(all(target_arch="arm",target_os="linux")))'.build-dependencies]
+bindgen = "^0.43.0"
+
+[target.'cfg(target_os="linux")'.build-dependencies]
+cc = "1.0"

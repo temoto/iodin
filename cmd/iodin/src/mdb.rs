@@ -10,8 +10,6 @@ pub const STOP_BITS: u32 = 2;
 // pigpio way to handle data_bits > 8
 const WORD_SIZE: usize = 2;
 
-const SEND_WAIT_STEP: u32 = 79;
-
 fn mdb_wave_create(pin: u16, s: &[u8]) -> Result<Wave> {
     const OFFSET: u32 = 0;
     let w = Wave::new_serial(pin.into(), BAUD, DATA_BITS, STOP_BITS, OFFSET, s)?;
@@ -40,22 +38,24 @@ fn mdb_wave_send_wait(w: &Wave, deadline: u32, err: &str) -> Result<()> {
 }
 
 pub struct GpioMdb {
-    tx_pin: u16,
     rx_pin: u16,
+    tx_pin: u16,
     wave_ack: Wave,
     wave_nak: Wave,
     // wave_ret: Wave,
 }
 
 impl GpioMdb {
-    pub fn new(tx_pin: u16, rx_pin: u16) -> Result<GpioMdb> {
+    pub fn new(rx_pin: u16, tx_pin: u16) -> Result<GpioMdb> {
+        debug!("GpioMdb::new rx={} tx={}", rx_pin, tx_pin);
+        check(unsafe { gpioSetMode(rx_pin.into(), PI_INPUT) })?;
         check(unsafe { gpioSetMode(tx_pin.into(), PI_OUTPUT) })?;
         check(unsafe { gpioSerialReadOpen(rx_pin.into(), BAUD, DATA_BITS) })?;
         check(unsafe { gpioWaveTxStop() })?;
 
         let m = GpioMdb {
-            tx_pin: tx_pin,
             rx_pin: rx_pin,
+            tx_pin: tx_pin,
             wave_ack: mdb_wave_create(tx_pin, &[0x00, 0x00])?,
             wave_nak: mdb_wave_create(tx_pin, &[0xaa, 0x00])?,
             // wave_ret: mdb_wave_create(tx_pin, &[0xff, 0x00])?,

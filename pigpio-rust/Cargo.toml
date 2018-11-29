@@ -1,0 +1,8 @@
+[package]
+name = "pigpio"
+version = "0.1.0"
+authors = ["Sergey Shepelev <temotor@gmail.com>"]
+edition = "2018"
+
+[target.'cfg(target_os="linux")'.dependencies]
+pigpio-sys = { path = "../pigpio-sys" }

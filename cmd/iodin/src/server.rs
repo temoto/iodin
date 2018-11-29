@@ -1,40 +1,43 @@
 use crate::error::*;
 use crate::mdb;
 use crate::proto::iodin::*;
-use std::os::unix::net::UnixDatagram;
 use std::time::Duration;
+use std::io;
 
 pub const MAX_MSG_SIZE: usize = 256;
 pub const MDB_TIMEOUT: Duration = Duration::from_millis(300);
 
 pub struct Server {
     mdb: Option<mdb::GpioMdb>,
-    sock: UnixDatagram,
 }
 
 impl Server {
-    pub fn new(s: UnixDatagram) -> Result<Self> {
-        pigpio::init()?;
-        Ok(Server { mdb: None, sock: s })
+    pub fn new(mock: bool) -> Result<Self> {
+        if !mock {
+            pigpio::init(pigpio::PI_DISABLE_FIFO_IF | pigpio::PI_DISABLE_SOCK_IF)?;
+        }
+        Ok(Server { mdb: None })
     }
 
-    pub fn run(&mut self) -> Result<()> {
+    pub fn run(&mut self, mut r: &mut io::Read, mut w: &mut io::Write) -> Result<()> {
         use protobuf::Message;
 
-        let mut buf: Vec<u8> = Vec::with_capacity(MAX_MSG_SIZE);
+        let mut is = protobuf::CodedInputStream::new(&mut r);
+        let mut os = protobuf::CodedOutputStream::new(&mut w);
         loop {
-            let msglen = self.sock.recv(&mut buf)?;
-            let msg = &buf[..msglen];
-            debug!("recv len={} buf={:02x?}", msglen, msg);
-
+            let mut request = Request::new();
             let mut response = Response::new();
-            match protobuf::parse_from_bytes::<Request>(msg) {
+
+            let msglen = is.read_fixed32()?;
+            eprintln!("msglen={}", msglen);
+            let old_limit = is.push_limit(msglen.into())?;
+            match request.merge_from(&mut is) {
                 Err(e) => {
                     error!("error protobuf parse: {}", e);
                     response.status = Response_Status::ERR_INPUT;
                     response.error = e.to_string();
                 }
-                Ok(request) => {
+                Ok(()) => {
                     if let Err(e) = self.exec(&request, &mut response) {
                         error!("error: {}", e);
                         for e in e.iter().skip(1) {
@@ -43,22 +46,16 @@ impl Server {
                     }
                 }
             }
-            buf.clear();
-            match response.write_to_vec(&mut buf) {
-                Ok(_) => {
-                    if let Err(e) = self.sock.send(buf.as_slice()) {
-                        error!("send response: {:?}", &e);
-                    }
-                }
-                Err(e) => {
-                    error!("response marshal: {:?}", &e);
-                }
-            };
+            is.pop_limit(old_limit);
+
+            os.write_fixed32_no_tag(response.compute_size())?;
+            response.write_to(&mut os)?;
+            os.flush()?;
         }
     }
 
     pub fn exec(&mut self, request: &Request, response: &mut Response) -> Result<()> {
-        // debug!("exec {:x?}", request);
+        debug!("exec {:x?}", request);
         match request.command {
             Request_Command::INVALID => {
                 response.status = Response_Status::ERR_INPUT;

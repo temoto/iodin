@@ -17,11 +17,30 @@ mod error {
             Fmt(::std::fmt::Error);
             IoError(::std::io::Error);
             NumParse(::std::num::ParseIntError);
+            Protobuf(protobuf::ProtobufError);
             StringUtf8(::std::string::FromUtf8Error);
         }
     }
 }
 use self::error::*;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::proto::iodin::*;
+    use std::os::unix::net::UnixDatagram;
+
+    #[test]
+    fn server_exec_zero_invalid_command() {
+        let (_sock1, sock2) = UnixDatagram::pair().unwrap();
+        let mut s = server::Server::new(sock2, true).unwrap();
+        let req = Request::new();
+        let mut resp = Response::new();
+        let r = s.exec(&req, &mut resp);
+        assert!(r.is_err());
+        assert_eq!(r.err().unwrap().to_string(), "invalid command");
+    }
+}
 
 fn main() {
     stderrlog::new()
@@ -47,12 +66,11 @@ fn main() {
 
 /// The actual main(), but with the ability to use ? for easy early return
 fn run() -> Result<()> {
-    use std::os::unix::io::{FromRawFd, RawFd};
-    use std::os::unix::net::UnixDatagram;
-    use std::time::Duration;
+    use std::fs::File;
+    use std::os::unix::io::FromRawFd;
 
-    let sock_fd: RawFd = std::env::var("sock_fd")?.parse::<i32>()?;
-    let socket: UnixDatagram = unsafe { UnixDatagram::from_raw_fd(sock_fd) };
-    socket.set_write_timeout(Some(Duration::from_millis(15000)))?;
-    server::Server::new(socket)?.run()
+    let mut stdin = unsafe{File::from_raw_fd(0)};
+    let mut stdout = unsafe{File::from_raw_fd(1)};
+    server::Server::new(false)?.run(&mut stdin, &mut stdout)?;
+    Ok(())
 }
