@@ -1,14 +1,15 @@
 use crate::error::*;
 use crate::mdb;
 use crate::proto::iodin::*;
-use std::time::Duration;
 use std::io;
+use std::time::Duration;
 
-pub const MAX_MSG_SIZE: usize = 256;
 pub const MDB_TIMEOUT: Duration = Duration::from_millis(300);
 
 pub struct Server {
     mdb: Option<mdb::GpioMdb>,
+    mock: bool,
+    running: bool,
 }
 
 impl Server {
@@ -16,7 +17,11 @@ impl Server {
         if !mock {
             pigpio::init(pigpio::PI_DISABLE_FIFO_IF | pigpio::PI_DISABLE_SOCK_IF)?;
         }
-        Ok(Server { mdb: None })
+        Ok(Server {
+            mdb: None,
+            mock: mock,
+            running: false,
+        })
     }
 
     pub fn run(&mut self, mut r: &mut io::Read, mut w: &mut io::Write) -> Result<()> {
@@ -24,12 +29,12 @@ impl Server {
 
         let mut is = protobuf::CodedInputStream::new(&mut r);
         let mut os = protobuf::CodedOutputStream::new(&mut w);
-        loop {
+        self.running = true;
+        while self.running {
             let mut request = Request::new();
             let mut response = Response::new();
 
             let msglen = is.read_fixed32()?;
-            eprintln!("msglen={}", msglen);
             let old_limit = is.push_limit(msglen.into())?;
             match request.merge_from(&mut is) {
                 Err(e) => {
@@ -52,15 +57,21 @@ impl Server {
             response.write_to(&mut os)?;
             os.flush()?;
         }
+        Ok(())
     }
 
     pub fn exec(&mut self, request: &Request, response: &mut Response) -> Result<()> {
-        debug!("exec {:x?}", request);
+        // debug!("exec {:x?}", request);
         match request.command {
             Request_Command::INVALID => {
                 response.status = Response_Status::ERR_INPUT;
                 response.error = "invalid command".to_string();
                 return Err(response.error.clone().into());
+            }
+            Request_Command::STOP => {
+                self.running = false;
+                response.status = Response_Status::OK;
+                return Ok(());
             }
             Request_Command::MDB_OPEN => {
                 self.mdb = None;
@@ -105,12 +116,17 @@ impl Server {
                 }
                 Some(m) => {
                     let mut mdb_response = Vec::with_capacity(mdb::BLOCK_MAX_LENGTH);
-                    if let Err(e) = m.tx(&request.arg_bytes, &mut mdb_response, MDB_TIMEOUT) {
-                        response.status = Response_Status::ERR_HARDWARE;
-                        response.error = e.to_string();
-                        return Err(e);
+                    if self.mock {
+                        mdb_response.extend_from_slice(&request.arg_bytes);
+                    } else {
+                        if let Err(e) = m.tx(&request.arg_bytes, &mut mdb_response, MDB_TIMEOUT) {
+                            response.status = Response_Status::ERR_HARDWARE;
+                            response.error = e.to_string();
+                            return Err(e);
+                        }
                     }
                     response.status = Response_Status::OK;
+                    response.data_bytes.append(&mut mdb_response);
                 }
             },
         };

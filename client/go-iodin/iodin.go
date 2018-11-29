@@ -45,6 +45,13 @@ func NewClient(path string) (*Client, error) {
 	return c, nil
 }
 
+func (self *Client) Close() error {
+	r := Request{
+		Command: Request_STOP,
+	}
+	return self.Do(&r, new(Response))
+}
+
 func (self *Client) Do(request *Request, response *Response) error {
 	// sock.SetDeadline(time.Now().Add(5*time.Second))
 	// defer sock.SetDeadline(time.Time{})
