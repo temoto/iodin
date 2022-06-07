@@ -14,5 +14,5 @@ protoc-rust = "^2.1"
 error-chain = { version = "^0.9", default-features = false } # no backtrace
 log = "^0.4"
 pigpio = { path = "../../pigpio-rust" }
-protobuf = { version = "~2.1", features = ["with-bytes"] }
+protobuf = { version = "~3.0", features = ["with-bytes"] }
 stderrlog = "^0.4.1"
