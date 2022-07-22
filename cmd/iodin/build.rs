@@ -1,17 +1,12 @@
-extern crate protoc_rust;
-
-use protoc_rust::Customize;
+use protobuf_codegen::Codegen;
 
 fn main() {
-    let input = "../../protobuf/iodin.proto";
-    println!("rerun-if-changed={}", input);
-    protoc_rust::run(protoc_rust::Args {
-        out_dir: "src/proto",
-        input: &[input],
-        includes: &["../../protobuf"],
-        customize: Customize {
-            ..Default::default()
-        },
-    })
-    .expect("protoc");
+    let inputs = &[
+        "../../protobuf/iodin.proto",
+    ];
+    Codegen::new()
+        .out_dir("src/proto")
+        .inputs(inputs)
+        .include("../../protobuf")
+        .run_from_script();
 }

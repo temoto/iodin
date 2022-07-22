@@ -1,6 +1,9 @@
 use crate::error::*;
 use crate::mdb;
+use crate::proto::iodin::request::Command;
+use crate::proto::iodin::response::Status;
 use crate::proto::iodin::*;
+use std::convert::TryInto;
 use std::io;
 use std::time::Duration;
 
@@ -24,7 +27,7 @@ impl Server {
         })
     }
 
-    pub fn run(&mut self, mut r: &mut io::Read, mut w: &mut io::Write) -> Result<()> {
+    pub fn run(&mut self, mut r: &mut dyn io::Read, mut w: &mut dyn io::Write) -> Result<()> {
         use protobuf::Message;
 
         let mut is = protobuf::CodedInputStream::new(&mut r);
@@ -39,7 +42,7 @@ impl Server {
             match request.merge_from(&mut is) {
                 Err(e) => {
                     error!("error protobuf parse: {}", e);
-                    response.status = Response_Status::ERR_INPUT;
+                    response.status = Status::ERR_INPUT.into();
                     response.error = e.to_string();
                 }
                 Ok(()) => {
@@ -53,7 +56,7 @@ impl Server {
             }
             is.pop_limit(old_limit);
 
-            os.write_fixed32_no_tag(response.compute_size())?;
+            os.write_fixed32_no_tag(response.compute_size().try_into().unwrap())?;
             response.write_to(&mut os)?;
             os.flush()?;
         }
@@ -62,21 +65,21 @@ impl Server {
 
     pub fn exec(&mut self, request: &Request, response: &mut Response) -> Result<()> {
         // debug!("exec {:x?}", request);
-        match request.command {
-            Request_Command::INVALID => {
-                response.status = Response_Status::ERR_INPUT;
+        match request.command.enum_value_or_default() {
+            Command::INVALID => {
+                response.status = Status::ERR_INPUT.into();
                 response.error = "invalid command".to_string();
                 return Err(response.error.clone().into());
             }
-            Request_Command::STOP => {
+            Command::STOP => {
                 self.running = false;
-                response.status = Response_Status::OK;
+                response.status = Status::OK.into();
                 return Ok(());
             }
-            Request_Command::MDB_OPEN => {
+            Command::MDB_OPEN => {
                 self.mdb = None;
                 if request.arg_bytes.len() != 2 {
-                    response.status = Response_Status::ERR_INPUT;
+                    response.status = Status::ERR_INPUT.into();
                     response.error = "invalid arg_bytes".to_string();
                     return Err(response.error.clone().into());
                 }
@@ -84,33 +87,33 @@ impl Server {
                 match mdb::GpioMdb::new(rx.into(), tx.into()) {
                     Ok(m) => {
                         self.mdb = Some(m);
-                        response.status = Response_Status::OK;
+                        response.status = Status::OK.into();
                     }
                     Err(e) => {
-                        response.status = Response_Status::ERR_HARDWARE;
+                        response.status = Status::ERR_HARDWARE.into();
                         response.error = e.to_string();
                         return Err(e);
                     }
                 }
             }
-            Request_Command::MDB_RESET => match &mut self.mdb {
+            Command::MDB_RESET => match &mut self.mdb {
                 None => {
-                    response.status = Response_Status::ERR_INPUT;
+                    response.status = Status::ERR_INPUT.into();
                     response.error = "must mdb_open".to_string();
                     return Err(response.error.clone().into());
                 }
                 Some(m) => {
                     if let Err(e) = m.bus_reset(Duration::from_millis(request.arg_uint.into())) {
-                        response.status = Response_Status::ERR_HARDWARE;
+                        response.status = Status::ERR_HARDWARE.into();
                         response.error = e.to_string();
                         return Err(e);
                     }
-                    response.status = Response_Status::OK;
+                    response.status = Status::OK.into();
                 }
             },
-            Request_Command::MDB_TX => match &mut self.mdb {
+            Command::MDB_TX => match &mut self.mdb {
                 None => {
-                    response.status = Response_Status::ERR_INPUT;
+                    response.status = Status::ERR_INPUT.into();
                     response.error = "must mdb_open".to_string();
                     return Err(response.error.clone().into());
                 }
@@ -120,17 +123,17 @@ impl Server {
                         mdb_response.extend_from_slice(&request.arg_bytes);
                     } else {
                         if let Err(e) = m.tx(&request.arg_bytes, &mut mdb_response, MDB_TIMEOUT) {
-                            response.status = Response_Status::ERR_HARDWARE;
+                            response.status = Status::ERR_HARDWARE.into();
                             response.error = e.to_string();
                             return Err(e);
                         }
                     }
-                    response.status = Response_Status::OK;
+                    response.status = Status::OK.into();
                     response.data_bytes.append(&mut mdb_response);
                 }
             },
         };
-        assert_ne!(response.status, Response_Status::INVALID);
+        assert_ne!(response.status.enum_value_or_default(), Status::INVALID);
         Ok(())
     }
 }

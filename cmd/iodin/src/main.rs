@@ -18,7 +18,7 @@ mod error {
             Fmt(::std::fmt::Error);
             IoError(::std::io::Error);
             NumParse(::std::num::ParseIntError);
-            Protobuf(protobuf::ProtobufError);
+            Protobuf(protobuf::Error);
             StringUtf8(::std::string::FromUtf8Error);
         }
 

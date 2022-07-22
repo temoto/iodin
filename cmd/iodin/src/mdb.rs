@@ -79,7 +79,7 @@ impl GpioMdb {
             // wave_ret: mdb_wave_create(tx_pin, &[RESPONSE_RET, 0x00])?,
             wave_nak: mdb_wave_create(tx_pin, &[RESPONSE_NAK, 0x00])?,
             wait_step: wait_step,
-            buf: unsafe { std::mem::uninitialized() },
+            buf: unsafe { std::mem::MaybeUninit::uninit().assume_init() },
         };
         Ok(m)
     }

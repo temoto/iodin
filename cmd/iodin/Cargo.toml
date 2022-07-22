@@ -6,13 +6,15 @@ edition = "2018"
 build = "build.rs"
 # not ready yet
 publish = false
+rust-version = "1.36"
 
 [build-dependencies]
-protoc-rust = "^2.1"
+protobuf-codegen = "^3.0"
 
 [dependencies]
-error-chain = { version = "^0.9", default-features = false } # no backtrace
+error-chain = { version = "^0.12.1", default-features = false } # no backtrace
 log = "^0.4"
 pigpio = { path = "../../pigpio-rust" }
-protobuf = { version = "~3.0", features = ["with-bytes"] }
+protobuf = { version = "^3.0", features = ["with-bytes"] }
 stderrlog = "^0.4.1"
+thread_local = "^1.1.4"                                         # Data race in `Iter` and `IterMut`
