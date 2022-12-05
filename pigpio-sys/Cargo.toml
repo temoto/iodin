@@ -2,6 +2,7 @@
 name = "pigpio-sys"
 version = "0.1.0"
 authors = ["Sergey Shepelev <temotor@gmail.com>"]
+license = "Unlicense"
 edition = "2018"
 build = "build.rs"
 

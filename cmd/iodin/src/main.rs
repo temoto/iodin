@@ -5,8 +5,8 @@ extern crate error_chain;
 extern crate log;
 extern crate pigpio;
 extern crate protobuf;
-extern crate stderrlog;
 
+mod logger;
 mod mdb;
 mod proto;
 mod server;
@@ -42,6 +42,8 @@ use self::error::*;
 
 #[cfg(test)]
 mod tests {
+    use std::{convert::TryInto, error::Error};
+
     // extern crate test;
     use super::*;
     use crate::proto::iodin::*;
@@ -68,23 +70,24 @@ mod tests {
         assert!(r.is_err());
         let err = r.err().unwrap();
         assert!(match err {
-            Error(Protobuf(protobuf::ProtobufError::IoError(e)), _) => {
-                e.kind() == std::io::ErrorKind::UnexpectedEof
-            }
+            // FIXME match enum protobuf::WireError::UnexpectedEof
+            Error(Protobuf(perr), _) => perr.to_string() == "Unexpected end of file",
             _ => false,
-        });
+        })
     }
 
     #[test]
     fn server_run_stop_clean() {
         let mut request = Request::new();
-        request.command = Request_Command::STOP;
+        request.command = request::Command::STOP.into();
         let mut rv: Vec<u8> = Vec::new();
         let mut wv: Vec<u8> = Vec::new();
         let mut os = protobuf::CodedOutputStream::vec(&mut rv);
-        os.write_fixed32_no_tag(request.compute_size()).unwrap();
+        os.write_fixed32_no_tag(request.compute_size().try_into().unwrap())
+            .unwrap();
         request.write_to_with_cached_sizes(&mut os).unwrap();
         os.flush().unwrap();
+        drop(os);
         let mut s = server::Server::new(true).unwrap();
         let r = s.run(&mut rv.as_slice(), &mut wv);
         assert!(r.is_ok());
@@ -126,7 +129,7 @@ mod tests {
             std::mem::drop(is);
             assert!(r.is_ok(), r.err().unwrap());
             test::black_box(r);
-    
+
             b.iter(|| {
                 wv.clear();
                 let r = s.run(&mut rv.as_slice(), &mut wv);
@@ -137,12 +140,7 @@ mod tests {
 }
 
 fn main() {
-    stderrlog::new()
-        .quiet(false)
-        .verbosity(3)
-        .module(module_path!())
-        .init()
-        .unwrap();
+    logger::init(log::LevelFilter::Info).unwrap();
 
     if let Err(ref e) = run() {
         // Write the top-level error message

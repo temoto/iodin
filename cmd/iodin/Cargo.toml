@@ -2,6 +2,7 @@
 name = "iodin"
 version = "0.1.0"
 authors = ["Sergey Shepelev <temotor@gmail.com>"]
+license = "Unlicense"
 edition = "2018"
 build = "build.rs"
 # not ready yet
@@ -12,9 +13,8 @@ rust-version = "1.36"
 protobuf-codegen = "^3.0"
 
 [dependencies]
-error-chain = { version = "^0.12.1", default-features = false } # no backtrace
-log = "^0.4"
+error-chain = { version = "^0.12.1", default-features = false }          # no backtrace
+log = { version = "^0.4", default-features = false, features = ["std"] }
 pigpio = { path = "../../pigpio-rust" }
 protobuf = { version = "^3.0", features = ["with-bytes"] }
-stderrlog = "^0.4.1"
-thread_local = "^1.1.4"                                         # Data race in `Iter` and `IterMut`
+thread_local = "^1.1"
